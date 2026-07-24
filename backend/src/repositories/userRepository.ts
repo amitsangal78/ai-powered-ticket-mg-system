@@ -1,4 +1,4 @@
-import type { User } from '../schemas/domain.js';
+import type { User, UserRole } from '../schemas/domain.js';
 import { query, toIsoString } from './base.js';
 
 export type UserRow = {
@@ -63,4 +63,83 @@ export async function listUsers(): Promise<User[]> {
      ORDER BY name ASC`,
   );
   return result.rows.map(toUser);
+}
+
+export type CreateUserInput = {
+  name: string;
+  email: string;
+  role: UserRole;
+  passwordHash: string;
+};
+
+export async function createUser(input: CreateUserInput): Promise<User> {
+  const result = await query<UserRow>(
+    `INSERT INTO users (name, email, role, password_hash)
+     VALUES ($1, $2, $3, $4)
+     RETURNING ${PUBLIC_USER_COLUMNS}`,
+    [input.name, input.email, input.role, input.passwordHash],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('Failed to insert user');
+  }
+  return toUser(row);
+}
+
+export type UpdateUserFieldsInput = {
+  name?: string;
+  email?: string;
+  role?: UserRole;
+  passwordHash?: string;
+};
+
+export async function updateUser(
+  id: string,
+  fields: UpdateUserFieldsInput,
+): Promise<User | null> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+
+  if (fields.name !== undefined) {
+    params.push(fields.name);
+    sets.push(`name = $${params.length}`);
+  }
+  if (fields.email !== undefined) {
+    params.push(fields.email);
+    sets.push(`email = $${params.length}`);
+  }
+  if (fields.role !== undefined) {
+    params.push(fields.role);
+    sets.push(`role = $${params.length}`);
+  }
+  if (fields.passwordHash !== undefined) {
+    params.push(fields.passwordHash);
+    sets.push(`password_hash = $${params.length}`);
+  }
+
+  if (sets.length === 0) {
+    return findUserById(id);
+  }
+
+  sets.push('updated_at = NOW()');
+  params.push(id);
+
+  const result = await query<UserRow>(
+    `UPDATE users
+     SET ${sets.join(', ')}
+     WHERE id = $${params.length}
+     RETURNING ${PUBLIC_USER_COLUMNS}`,
+    params,
+  );
+  const row = result.rows[0];
+  return row ? toUser(row) : null;
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+  const result = await query(
+    `DELETE FROM users
+     WHERE id = $1`,
+    [id],
+  );
+  return result.rowCount !== null && result.rowCount > 0;
 }

@@ -82,7 +82,24 @@ Point the frontend `VITE_API_URL` at this origin and `FRONTEND_ORIGIN` at the Vi
 | `npm test` | **Vitest + Supertest** (export `app` without listen) |
 | `npm run typecheck` | `tsc --noEmit` with strict flags |
 
-Tests must use a test database (or rolled-back transactions). **Do not mock `TicketStatusService`** in state-machine integration tests.
+### OpenAPI / Swagger (FR-19)
+
+| URL | Purpose |
+|-----|---------|
+| [http://localhost:3000/api/docs](http://localhost:3000/api/docs) | Swagger UI |
+| [http://localhost:3000/api/openapi.yaml](http://localhost:3000/api/openapi.yaml) | Committed OpenAPI 3 YAML |
+| [http://localhost:3000/api/openapi.json](http://localhost:3000/api/openapi.json) | Same document as JSON |
+
+Source file: [`openapi/openapi.yaml`](./openapi/openapi.yaml) — documents all implemented endpoints, Bearer JWT, and the `{ error, code, details? }` error shape.
+
+### Testing notes
+
+- Unit/API route tests mock services/repos where appropriate.
+- **State-machine + broader API integration** suites use a real Postgres DB (`tickets_test` by default). Override with `TEST_DATABASE_URL` if needed (same credentials style as `DATABASE_URL`).
+- Helpers under `src/__tests__/helpers/` create the DB if missing, migrate, seed admin/agent, and truncate tickets between cases.
+- **Do not mock `TicketStatusService`** in state-machine integration tests (`stateMachine.integration.test.ts`).
+- **Docker:** see repo-root `docker-compose.yml` and `backend/Dockerfile` (migrate + seed on container start).
+- **CI:** `.github/workflows/ci.yml` provides Postgres 16 and sets `TEST_DATABASE_URL`.
 
 ---
 
@@ -233,6 +250,14 @@ curl -s 'http://localhost:3000/api/tickets?search=login&status=Open' \
 
 ## Related docs
 
+Implementation and reviews must follow [`.cursor/rules/`](../.cursor/rules/) (see table at top). Lifecycle artifacts:
+
 - Root [`../README.md`](../README.md) — full-stack setup  
 - [`../docs/design-notes.md`](../docs/design-notes.md) — architecture diagrams  
 - [`../tool-specific/cursor-workflow/spec.md`](../tool-specific/cursor-workflow/spec.md) — full API / FR contracts  
+- [`../tool-specific/cursor-workflow/acceptance-criteria.md`](../tool-specific/cursor-workflow/acceptance-criteria.md) — FR → API/UI/tests → rules  
+- [`../tool-specific/cursor-workflow/cursor-rules-or-instructions.md`](../tool-specific/cursor-workflow/cursor-rules-or-instructions.md) — how rules are attached in Cursor  
+- [`../docs/code-review-notes.md`](../docs/code-review-notes.md) — AI drift corrections against rules  
+- [`../tool-workflow.md`](../tool-workflow.md) — Part A workflow  
+- [`../database/README.md`](../database/README.md) — Postgres setup  
+

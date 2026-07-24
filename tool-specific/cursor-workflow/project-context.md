@@ -23,7 +23,8 @@ It is **not a graded exam**. Feedback focuses on how AI was used across the life
 | Part C | Submission & reflection (form + artifacts) | ~20% |
 
 - **Timebox:** ~1 week self-paced; Core app ~**8–12 focused hours**. Do **not** expand the app at the expense of lifecycle artifacts.
-- **Primary AI tool:** Cursor. Expected artifacts in this folder: `project-context.md` (this file), `spec.md`, `tasks.md`, `acceptance-criteria.md`, `cursor-rules-or-instructions.md`.
+- **Primary AI tool:** Cursor. Expected artifacts in this folder: `project-context.md` (this file), `spec.md`, `tasks.md`, `acceptance-criteria.md`, `cursor-rules-or-instructions.md`.  
+  Also required at repo level: [`tool-workflow.md`](../../tool-workflow.md), [`docs/reflection.md`](../../docs/reflection.md), [`docs/pr-description.md`](../../docs/pr-description.md), [`docs/code-review-notes.md`](../../docs/code-review-notes.md), [`docs/design-notes.md`](../../docs/design-notes.md). All of these reference **`.cursor/rules/`** usage.
 
 ### Business problem
 
@@ -86,17 +87,19 @@ Integration tests that prove the state-machine rules: valid transitions succeed;
 
 ### Core acceptance criteria
 
-- [ ] Create ticket via UI  
-- [ ] View all tickets from DB  
-- [ ] Open ticket detail  
-- [ ] Update fields + reassign  
-- [ ] Add comments  
-- [ ] Valid status transitions succeed; invalid rejected  
-- [ ] Keyword search + status filter work  
-- [ ] Data survives restart  
-- [ ] Backend validation prevents invalid records  
-- [ ] No secrets committed  
-- [ ] State-machine integration tests pass  
+- [x] Create ticket via UI  
+- [x] View all tickets from DB  
+- [x] Open ticket detail  
+- [x] Update fields + reassign  
+- [x] Add comments  
+- [x] Valid status transitions succeed; invalid rejected  
+- [x] Keyword search + status filter work  
+- [x] Data survives restart  
+- [x] Backend validation prevents invalid records  
+- [x] No secrets committed  
+- [x] State-machine integration tests pass  
+
+Full FR → tests → [`.cursor/rules/`](../../.cursor/rules/) trace: [`acceptance-criteria.md`](./acceptance-criteria.md).
 
 ### Stretch (optional — after Core + artifacts)
 

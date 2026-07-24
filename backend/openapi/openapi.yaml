@@ -1,0 +1,733 @@
+openapi: 3.0.3
+info:
+  title: Support Ticket Management API
+  description: |
+    Internal support ticket API (Express 5 + PostgreSQL).
+
+    **Auth:** most endpoints require `Authorization: Bearer <JWT>` from `POST /api/auth/login`.
+
+    **Success bodies** are bare resources or arrays (no `{ success: true }` envelope).
+
+    **Errors** always use:
+    ```json
+    { "error": "string", "code": "STRING_CODE", "details": {} }
+    ```
+
+    **Status transitions** (only via `PATCH /api/tickets/{id}/status`):
+    - Open → In Progress | Cancelled
+    - In Progress → Resolved | Cancelled
+    - Resolved → Closed
+    - Closed / Cancelled → *(none)* — illegal edges return **409** `INVALID_TRANSITION`
+  version: 0.1.0
+  contact:
+    name: Ticket MG System
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Tickets
+  - name: Comments
+  - name: Users
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Liveness check
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      description: |
+        Rate limited to **10 requests / 15 minutes / IP** (all attempts counted).
+        Exceeding the limit returns **429** `RATE_LIMITED`.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: agent@example.com
+              password: Agent123!
+      responses:
+        '200':
+          description: JWT and public user (no password fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Login rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                error: Too many login attempts. Try again later.
+                code: RATE_LIMITED
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current authenticated user
+      operationId: getMe
+      responses:
+        '200':
+          description: Public user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets:
+    get:
+      tags: [Tickets]
+      summary: List tickets
+      description: |
+        Optional `search` (title OR description, case-insensitive ILIKE) and `status`
+        filters are combinable (AND). Core returns all matches (no pagination envelope).
+      operationId: listTickets
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keyword matched against title or description
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TicketStatus'
+      responses:
+        '200':
+          description: Ticket array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ticket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Tickets]
+      summary: Create ticket
+      description: New tickets always start with status `Open`.
+      operationId: createTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTicketRequest'
+      responses:
+        '201':
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/tickets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Tickets]
+      summary: Get ticket detail (includes comments)
+      operationId: getTicket
+      responses:
+        '200':
+          description: Ticket with comments array
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketDetail'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Tickets]
+      summary: Update ticket fields
+      description: |
+        Updates title, description, priority, and/or assignedTo.
+        **Must not** include `status` — use `PATCH /api/tickets/{id}/status` instead
+        (sending `status` here returns **400**).
+      operationId: updateTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTicketRequest'
+      responses:
+        '200':
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    patch:
+      tags: [Tickets]
+      summary: Transition ticket status
+      description: |
+        Sole status mutation endpoint. Enforced by `TicketStatusService` inside a
+        transaction with `SELECT … FOR UPDATE`. Illegal transitions → **409**.
+      operationId: changeTicketStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusTransitionRequest'
+      responses:
+        '200':
+          description: Ticket after successful transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                error: "Cannot transition from 'Open' to 'Resolved'"
+                code: INVALID_TRANSITION
+
+  /api/tickets/{id}/comments:
+    parameters:
+      - $ref: '#/components/parameters/TicketId'
+    get:
+      tags: [Comments]
+      summary: List comments for a ticket
+      operationId: listComments
+      responses:
+        '200':
+          description: Comment array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Comments]
+      summary: Add a comment
+      operationId: createComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users (assignee picker)
+      description: Available to authenticated **agent** and **admin**. Never returns password fields.
+      operationId: listUsers
+      responses:
+        '200':
+          description: User array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Users]
+      summary: Create user (admin only)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Created user (no password fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users]
+      summary: Get user by id (admin only)
+      operationId: getUser
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Users]
+      summary: Update user (admin only)
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Users]
+      summary: Delete user (admin only)
+      operationId: deleteUser
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: FK restrict (user still referenced)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from `POST /api/auth/login`
+
+  parameters:
+    TicketId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Ticket UUID
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: User UUID
+
+  schemas:
+    TicketStatus:
+      type: string
+      enum: [Open, In Progress, Resolved, Closed, Cancelled]
+
+    TicketPriority:
+      type: string
+      enum: [low, medium, high]
+
+    UserRole:
+      type: string
+      enum: [agent, admin]
+
+    ApiError:
+      type: object
+      required: [error, code]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          description: Human-readable message
+        code:
+          type: string
+          description: Machine-readable code (e.g. VALIDATION_ERROR, UNAUTHORIZED)
+        details:
+          description: Optional validation or context payload
+          nullable: true
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    User:
+      type: object
+      required: [id, name, email, role, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      description: Public user — never includes password / passwordHash / password_hash
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      required: [token, user]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          description: JWT access token
+        user:
+          $ref: '#/components/schemas/User'
+
+    Ticket:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - priority
+        - status
+        - assignedTo
+        - createdBy
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+          description: Plain text — no `<` or `>`
+        description:
+          type: string
+          maxLength: 5000
+          description: Plain text — no `<` or `>`
+        priority:
+          $ref: '#/components/schemas/TicketPriority'
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Comment:
+      type: object
+      required: [id, ticketId, message, createdBy, createdAt]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticketId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          maxLength: 2000
+          description: Plain text — no `<` or `>`
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    TicketDetail:
+      allOf:
+        - $ref: '#/components/schemas/Ticket'
+        - type: object
+          required: [comments]
+          properties:
+            comments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Comment'
+
+    CreateTicketRequest:
+      type: object
+      required: [title, description, priority]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        priority:
+          $ref: '#/components/schemas/TicketPriority'
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+
+    UpdateTicketRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: At least one field required. Do not send `status`.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        priority:
+          $ref: '#/components/schemas/TicketPriority'
+        assignedTo:
+          type: string
+          format: uuid
+          nullable: true
+
+    StatusTransitionRequest:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+
+    CreateCommentRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          maxLength: 2000
+
+    CreateUserRequest:
+      type: object
+      required: [name, email, role, password]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error: Validation failed
+            code: VALIDATION_ERROR
+            details:
+              title: ['HTML not allowed']
+    Unauthorized:
+      description: Missing or invalid Bearer token / bad credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error: Unauthorized
+            code: UNAUTHORIZED
+    Forbidden:
+      description: Authenticated but insufficient role (admin required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error: Forbidden
+            code: FORBIDDEN
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error: Ticket not found
+            code: NOT_FOUND
+    Conflict:
+      description: Unique / FK conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error: Resource already exists
+            code: CONFLICT
+
+security:
+  - bearerAuth: []

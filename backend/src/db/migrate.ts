@@ -60,10 +60,7 @@ async function applyMigration(
   }
 }
 
-export async function runMigrations(): Promise<void> {
-  loadDotEnvFile();
-  const env = loadEnv();
-  createPool(env);
+export async function applyAllMigrations(): Promise<void> {
   const pool = getPool();
   const client = await pool.connect();
 
@@ -81,11 +78,29 @@ export async function runMigrations(): Promise<void> {
     console.info('Migrations complete.');
   } finally {
     client.release();
+  }
+}
+
+export async function runMigrations(): Promise<void> {
+  loadDotEnvFile();
+  const env = loadEnv();
+  createPool(env);
+
+  try {
+    await applyAllMigrations();
+  } finally {
     await closePool();
   }
 }
 
-void runMigrations().catch((err: unknown) => {
-  console.error('Migration failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+const entry = process.argv[1];
+const isDirectRun =
+  typeof entry === 'string' &&
+  path.resolve(entry) === path.resolve(fileURLToPath(import.meta.url));
+
+if (isDirectRun) {
+  void runMigrations().catch((err: unknown) => {
+    console.error('Migration failed:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

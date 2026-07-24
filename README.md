@@ -103,18 +103,19 @@ Documented here only (not in source comments). Change before any shared or produ
 
 ## How to run
 
-Open **two terminals**.
+Open **two terminals** for host-based Node, **or** use Docker for API + Postgres.
 
-### Backend API
+### Backend API (host)
 
 ```bash
 cd backend
 npm run dev
 # → http://localhost:3000
 # Health: GET http://localhost:3000/api/health → { "status": "ok" }
+# OpenAPI: http://localhost:3000/api/docs
 ```
 
-### Frontend SPA
+### Frontend SPA (host)
 
 ```bash
 cd frontend
@@ -123,6 +124,40 @@ npm run dev
 ```
 
 Log in with a seed user above. Ensure `FRONTEND_ORIGIN` matches the Vite URL and `VITE_API_URL` points at the API.
+
+### Docker (Postgres + backend)
+
+Local stack for API + database (frontend still runs on the host with Vite by default):
+
+```bash
+# From repo root
+cp .env.example .env   # optional overrides; defaults work for local compose
+
+docker compose up --build
+# API  → http://localhost:3000
+# Docs → http://localhost:3000/api/docs
+# DB   → localhost:5432 (user/pass/db: postgres/postgres/tickets)
+```
+
+On first start the backend container **migrates** and **seeds** admin/agent users, then listens.
+
+```bash
+# Stop
+docker compose down
+
+# Stop and wipe DB volume
+docker compose down -v
+```
+
+If host port **5432** is already taken by a local Postgres:
+
+```bash
+POSTGRES_PORT=5433 docker compose up --build
+```
+
+Point a host-run frontend at the container API with `VITE_API_URL=http://localhost:3000`.
+
+Images do **not** bake in secrets — `DATABASE_URL` / `JWT_SECRET` come from Compose environment (see `.env.example`).
 
 ### Tests
 
@@ -133,6 +168,8 @@ cd backend && npm test
 # Frontend — Vitest + React Testing Library
 cd frontend && npm test
 ```
+
+CI (GitHub Actions): [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck + tests for backend and frontend. Backend jobs use a **Postgres 16** service (`tickets_test`).
 
 ### Production-style build (optional)
 
@@ -147,16 +184,19 @@ cd frontend && npm run build && npm run preview
 
 ```
 ai-powered-ticket-mg-system/
-├── backend/                      # Express API, migrations, seed, tests
-├── frontend/                     # React SPA
-├── docs/                         # raw-requirements, design-notes, …
-├── tool-specific/cursor-workflow/  # project-context, spec, tasks, …
-├── .cursor/rules/                # coding standards (must follow)
-├── tool-workflow.md              # Part A — how Cursor is used
+├── backend/                        # Express API, migrations, seed, Dockerfile
+├── frontend/                       # React SPA
+├── database/                       # DB setup docs (README)
+├── docker-compose.yml              # Local Postgres + backend
+├── .github/workflows/ci.yml        # CI with Postgres service
+├── docs/                           # raw-requirements, design-notes, reflection, PR, review
+├── tool-specific/cursor-workflow/  # project-context, spec, tasks, acceptance, rules guide
+├── .cursor/rules/                  # coding standards (must follow on every change)
+├── tool-workflow.md                # Part A — how Cursor + rules are used
 └── README.md
 ```
 
-See [`docs/design-notes.md`](docs/design-notes.md) for architecture diagrams and [`tool-specific/cursor-workflow/spec.md`](tool-specific/cursor-workflow/spec.md) for full requirements.
+See [`docs/design-notes.md`](docs/design-notes.md) for architecture diagrams and [`tool-specific/cursor-workflow/spec.md`](tool-specific/cursor-workflow/spec.md) for full requirements. Every implementation change must stay compatible with [`.cursor/rules/`](.cursor/rules/).
 
 ---
 
@@ -170,6 +210,26 @@ Closed / Cancelled → (terminal)
 ```
 
 Invalid transitions are rejected by the backend with **409**; the UI shows an inline error without a full reload. Status changes go only through `TicketStatusService` / `PATCH /api/tickets/:id/status`.
+
+---
+
+## Documentation & exercise artifacts
+
+All planning and lifecycle artifacts reference **how** code must be written via [`.cursor/rules/`](.cursor/rules/).
+
+| Artifact | Path |
+|----------|------|
+| Part A — Cursor workflow | [`tool-workflow.md`](tool-workflow.md) |
+| Project context / spec / tasks | [`tool-specific/cursor-workflow/`](tool-specific/cursor-workflow/) |
+| Acceptance checklist (FR → tests → rules) | [`tool-specific/cursor-workflow/acceptance-criteria.md`](tool-specific/cursor-workflow/acceptance-criteria.md) |
+| How `.cursor/rules/` are used | [`tool-specific/cursor-workflow/cursor-rules-or-instructions.md`](tool-specific/cursor-workflow/cursor-rules-or-instructions.md) |
+| Design notes | [`docs/design-notes.md`](docs/design-notes.md) |
+| Reflection | [`docs/reflection.md`](docs/reflection.md) |
+| PR description | [`docs/pr-description.md`](docs/pr-description.md) |
+| Code review notes | [`docs/code-review-notes.md`](docs/code-review-notes.md) |
+| Database setup | [`database/README.md`](database/README.md) |
+| Backend API | [`backend/README.md`](backend/README.md) |
+| Frontend SPA | [`frontend/README.md`](frontend/README.md) |
 
 ---
 

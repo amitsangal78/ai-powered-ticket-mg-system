@@ -256,13 +256,20 @@ Skeletons: `animate-pulse`. Never `outline-none` without `focus:ring-*`.
 | `/login` | public | Login form |
 | `/tickets` | authenticated | List + search/status filters |
 | `/tickets/:id` | authenticated | Detail, edit fields, comments, status |
-| `/admin/users` | `admin` only (Stretch) | User management |
+| `/users` | `admin` only (Stretch) | User management (`AdminRoute`) |
 
 ---
 
 ## Related docs
 
+Implementation and reviews must follow [`.cursor/rules/`](../.cursor/rules/) (see table at top). Lifecycle artifacts:
+
 - Root [`../README.md`](../README.md) — full-stack setup  
 - [`../backend/README.md`](../backend/README.md) — API list & CORS  
 - [`../docs/design-notes.md`](../docs/design-notes.md) — frontend architecture diagrams  
 - [`../tool-specific/cursor-workflow/spec.md`](../tool-specific/cursor-workflow/spec.md) — FRs & acceptance criteria  
+- [`../tool-specific/cursor-workflow/acceptance-criteria.md`](../tool-specific/cursor-workflow/acceptance-criteria.md) — FR → UI/tests → rules  
+- [`../tool-specific/cursor-workflow/cursor-rules-or-instructions.md`](../tool-specific/cursor-workflow/cursor-rules-or-instructions.md) — how rules are attached in Cursor  
+- [`../docs/reflection.md`](../docs/reflection.md) / [`../docs/code-review-notes.md`](../docs/code-review-notes.md)  
+- [`../tool-workflow.md`](../tool-workflow.md) — Part A workflow  
+

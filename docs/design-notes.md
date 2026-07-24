@@ -3,6 +3,7 @@
 Design decisions for the Backend-Heavy AI Capability Exercise project.
 
 **Standards:** Implementation must follow `.cursor/rules/` — especially `coding-standards.mdc`, `nodejs-backend-patterns.mdc`, `database-standards.mdc`, `typescript-strict.mdc`, `react19-standards.mdc`, and `tailwind-standards.mdc`.  
+See also: [`../tool-specific/cursor-workflow/cursor-rules-or-instructions.md`](../tool-specific/cursor-workflow/cursor-rules-or-instructions.md) (how rules are attached in Cursor) and [`code-review-notes.md`](./code-review-notes.md) (AI drift corrections).  
 **Product scope:** `docs/raw-requirements.md` + `tool-specific/cursor-workflow/spec.md`.
 
 ---

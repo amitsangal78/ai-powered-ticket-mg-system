@@ -2,6 +2,13 @@ import type { QueryResult, QueryResultRow } from 'pg';
 import { AppError } from '../middleware/errors.js';
 import { getPool, isPgDatabaseError, mapPoolAcquireError } from '../db/pool.js';
 
+export type TxQueryClient = {
+  query: <R extends QueryResultRow = QueryResultRow>(
+    text: string,
+    params?: readonly unknown[],
+  ) => Promise<QueryResult<R>>;
+};
+
 /**
  * Parameterized query helper — always pass values as `$1…` binds.
  * Never interpolate user input into the SQL string.
@@ -21,12 +28,7 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
 }
 
 export async function withTransaction<T>(
-  fn: (client: {
-    query: <R extends QueryResultRow = QueryResultRow>(
-      text: string,
-      params?: readonly unknown[],
-    ) => Promise<QueryResult<R>>;
-  }) => Promise<T>,
+  fn: (client: TxQueryClient) => Promise<T>,
 ): Promise<T> {
   let client;
   try {

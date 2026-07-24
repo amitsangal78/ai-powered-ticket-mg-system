@@ -1,5 +1,15 @@
-import type { Comment, Ticket, TicketPriority, TicketStatus } from '../schemas/domain.js';
-import { query, toIsoString, withTransaction } from './base.js';
+import type {
+  Comment,
+  Ticket,
+  TicketPriority,
+  TicketStatus,
+} from '../schemas/domain.js';
+import {
+  query,
+  toIsoString,
+  withTransaction,
+  type TxQueryClient,
+} from './base.js';
 
 export type TicketRow = {
   id: string;
@@ -59,6 +69,21 @@ export type TicketListFilters = {
   status?: TicketStatus;
 };
 
+export type CreateTicketInput = {
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  assignedTo: string | null;
+  createdBy: string;
+};
+
+export type UpdateTicketFieldsInput = {
+  title?: string;
+  description?: string;
+  priority?: TicketPriority;
+  assignedTo?: string | null;
+};
+
 export async function listTickets(
   filters: TicketListFilters = {},
 ): Promise<Ticket[]> {
@@ -68,9 +93,7 @@ export async function listTickets(
   if (filters.search !== undefined && filters.search.length > 0) {
     params.push(`%${filters.search}%`);
     const idx = params.length;
-    clauses.push(
-      `(title ILIKE $${idx} OR description ILIKE $${idx})`,
-    );
+    clauses.push(`(title ILIKE $${idx} OR description ILIKE $${idx})`);
   }
 
   if (filters.status !== undefined) {
@@ -78,8 +101,7 @@ export async function listTickets(
     clauses.push(`status = $${params.length}`);
   }
 
-  const where =
-    clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const result = await query<TicketRow>(
     `SELECT ${TICKET_COLUMNS}
@@ -103,6 +125,71 @@ export async function findTicketById(id: string): Promise<Ticket | null> {
   return row ? toTicket(row) : null;
 }
 
+export async function createTicket(
+  input: CreateTicketInput,
+): Promise<Ticket> {
+  const result = await query<TicketRow>(
+    `INSERT INTO tickets (
+       title, description, priority, status, assigned_to, created_by
+     ) VALUES ($1, $2, $3, 'Open', $4, $5)
+     RETURNING ${TICKET_COLUMNS}`,
+    [
+      input.title,
+      input.description,
+      input.priority,
+      input.assignedTo,
+      input.createdBy,
+    ],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('Failed to insert ticket');
+  }
+  return toTicket(row);
+}
+
+export async function updateTicketFields(
+  id: string,
+  fields: UpdateTicketFieldsInput,
+): Promise<Ticket | null> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+
+  if (fields.title !== undefined) {
+    params.push(fields.title);
+    sets.push(`title = $${params.length}`);
+  }
+  if (fields.description !== undefined) {
+    params.push(fields.description);
+    sets.push(`description = $${params.length}`);
+  }
+  if (fields.priority !== undefined) {
+    params.push(fields.priority);
+    sets.push(`priority = $${params.length}`);
+  }
+  if (fields.assignedTo !== undefined) {
+    params.push(fields.assignedTo);
+    sets.push(`assigned_to = $${params.length}`);
+  }
+
+  if (sets.length === 0) {
+    return findTicketById(id);
+  }
+
+  sets.push('updated_at = NOW()');
+  params.push(id);
+
+  const result = await query<TicketRow>(
+    `UPDATE tickets
+     SET ${sets.join(', ')}
+     WHERE id = $${params.length}
+     RETURNING ${TICKET_COLUMNS}`,
+    params,
+  );
+  const row = result.rows[0];
+  return row ? toTicket(row) : null;
+}
+
 export async function listCommentsForTicket(
   ticketId: string,
 ): Promise<Comment[]> {
@@ -116,35 +203,57 @@ export async function listCommentsForTicket(
   return result.rows.map(toComment);
 }
 
-/**
- * Lock ticket row and update status inside a transaction (FOR UPDATE).
- * Caller must validate the transition before invoking.
- */
-export async function updateTicketStatusWithLock(
+export async function createComment(input: {
+  ticketId: string;
+  message: string;
+  createdBy: string;
+}): Promise<Comment> {
+  const result = await query<CommentRow>(
+    `INSERT INTO comments (ticket_id, message, created_by)
+     VALUES ($1, $2, $3)
+     RETURNING ${COMMENT_COLUMNS}`,
+    [input.ticketId, input.message, input.createdBy],
+  );
+  const row = result.rows[0];
+  if (!row) {
+    throw new Error('Failed to insert comment');
+  }
+  return toComment(row);
+}
+
+/** Used only by TicketStatusService inside a transaction. */
+export async function lockTicketRow(
+  client: TxQueryClient,
+  ticketId: string,
+): Promise<TicketRow | null> {
+  const locked = await client.query<TicketRow>(
+    `SELECT ${TICKET_COLUMNS}
+     FROM tickets
+     WHERE id = $1
+     FOR UPDATE`,
+    [ticketId],
+  );
+  return locked.rows[0] ?? null;
+}
+
+/** Used only by TicketStatusService inside a transaction. */
+export async function applyTicketStatus(
+  client: TxQueryClient,
   ticketId: string,
   toStatus: TicketStatus,
-): Promise<Ticket | null> {
-  return withTransaction(async (client) => {
-    const locked = await client.query<TicketRow>(
-      `SELECT ${TICKET_COLUMNS}
-       FROM tickets
-       WHERE id = $1
-       FOR UPDATE`,
-      [ticketId],
-    );
-    const current = locked.rows[0];
-    if (!current) {
-      return null;
-    }
-
-    const updated = await client.query<TicketRow>(
-      `UPDATE tickets
-       SET status = $1, updated_at = NOW()
-       WHERE id = $2
-       RETURNING ${TICKET_COLUMNS}`,
-      [toStatus, ticketId],
-    );
-    const row = updated.rows[0];
-    return row ? toTicket(row) : null;
-  });
+): Promise<Ticket> {
+  const updated = await client.query<TicketRow>(
+    `UPDATE tickets
+     SET status = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING ${TICKET_COLUMNS}`,
+    [toStatus, ticketId],
+  );
+  const row = updated.rows[0];
+  if (!row) {
+    throw new Error('Failed to update ticket status');
+  }
+  return toTicket(row);
 }
+
+export { withTransaction };

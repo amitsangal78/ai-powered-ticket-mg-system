@@ -1,0 +1,62 @@
+# Local development stack: PostgreSQL + backend API
+# Usage: docker compose up --build
+#
+# Secrets are NOT baked into images — pass via environment / .env (compose).
+# See README.md "Docker" section and database/README.md.
+
+name: ticket-mg
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ticket-mg-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-tickets}
+    ports:
+      # Host 5432 may conflict with a local Postgres — override with POSTGRES_PORT=5433
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ticket_mg_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tickets}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ticket-mg-backend
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      # Hostname `postgres` is the Compose service name (not localhost)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-tickets}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-min-32-characters!!}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      PORT: 3000
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  ticket_mg_pgdata:

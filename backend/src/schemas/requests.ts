@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { plainText, VALID_PRIORITIES, VALID_STATUSES } from './domain.js';
+import {
+  plainText,
+  VALID_PRIORITIES,
+  VALID_ROLES,
+  VALID_STATUSES,
+} from './domain.js';
 
 export const loginRequestSchema = z
   .object({
@@ -41,6 +46,27 @@ export const createCommentRequestSchema = z
   })
   .strict();
 
+export const createUserRequestSchema = z
+  .object({
+    name: plainText(100),
+    email: z.string().email(),
+    role: z.enum(VALID_ROLES),
+    password: z.string().min(8).max(128),
+  })
+  .strict();
+
+export const updateUserRequestSchema = z
+  .object({
+    name: plainText(100).optional(),
+    email: z.string().email().optional(),
+    role: z.enum(VALID_ROLES).optional(),
+    password: z.string().min(8).max(128).optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: 'At least one field is required',
+  });
+
 export const ticketListQuerySchema = z
   .object({
     search: z.string().optional(),
@@ -55,3 +81,6 @@ export type StatusTransitionRequest = z.infer<
   typeof statusTransitionRequestSchema
 >;
 export type CreateCommentRequest = z.infer<typeof createCommentRequestSchema>;
+export type TicketListQuery = z.infer<typeof ticketListQuerySchema>;
+export type CreateUserRequest = z.infer<typeof createUserRequestSchema>;
+export type UpdateUserRequest = z.infer<typeof updateUserRequestSchema>;

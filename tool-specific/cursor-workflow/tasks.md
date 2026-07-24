@@ -22,12 +22,11 @@
 | `.cursor/rules/*.mdc` (all six) | ✅ Present |
 | `docs/raw-requirements.md` | ✅ Present |
 | `project-context.md`, `spec.md`, `tasks.md` | ✅ Present |
-| Root `README.md`, `.gitignore` | ✅ Stub / basic — harden in Wave 0 / 7 |
-| `backend/` / `frontend/` package contents (`package.json`, `src/`, configs) | ✅ Wave 0 scaffolding done |
-| Migrations, seed, full API/UI | ❌ Not started (Wave 1+) |
-| Health API + scaffold tests (Vitest/Supertest + Vitest/RTL) | ✅ Present |
-| `acceptance-criteria.md`, `cursor-rules-or-instructions.md`, `tool-workflow.md`, `docs/design-notes.md` | ❌ Not started |
-| CI workflow file under `.github/workflows/` | ❌ Folder only — add in Wave 8.4 |
+| Root / package READMEs, `.gitignore`, Docker, CI | ✅ Complete (Wave 7 / 8.3–8.4) |
+| `backend/` / `frontend/` packages | ✅ Implemented |
+| Migrations, seed, Core API/UI, auth, tests | ✅ Done |
+| `acceptance-criteria.md`, `cursor-rules-or-instructions.md`, `tool-workflow.md`, `docs/design-notes.md`, `docs/reflection.md`, `docs/pr-description.md`, `docs/code-review-notes.md` | ✅ Present |
+| CI workflow (`.github/workflows/ci.yml` + Postgres) | ✅ Present |
 
 ### Rule quick-map (apply on every task)
 
@@ -190,61 +189,61 @@
 
 ### Task 2.1 — User repository
 
-- [ ] 2.1.1 `findByEmail` (case-insensitive) including hash for login only (internal use)
-- [ ] 2.1.2 `findById` / `listUsers` with **explicit columns** — never `password_hash` in public mappers
-- [ ] 2.1.3 `toUser()` mapper snake_case → camelCase + ISO timestamps
-- [ ] 2.1.4 Translate PG errors (`23505` → 409, `23503` → 409, `23502`/`23514` → 400)
+- [x] 2.1.1 `findByEmail` (case-insensitive) including hash for login only (internal use)
+- [x] 2.1.2 `findById` / `listUsers` with **explicit columns** — never `password_hash` in public mappers
+- [x] 2.1.3 `toUser()` mapper snake_case → camelCase + ISO timestamps
+- [x] 2.1.4 Translate PG errors (`23505` → 409, `23503` → 409, `23502`/`23514` → 400)
 
 **Definition of Done — Task 2.1**
 
-- [ ] Public user DTOs never include password fields
-- [ ] Parameterized queries only; no `SELECT *`
-- [ ] Trace: FR-12, P5, P7, P12
+- [x] Public user DTOs never include password fields
+- [x] Parameterized queries only; no `SELECT *`
+- [x] Trace: FR-12, P5, P7, P12
 
 ---
 
 ### Task 2.2 — Auth middleware & JWT
 
-- [ ] 2.2.1 `authenticateToken` — Bearer verify with `JWT_SECRET`; attach `{ sub, email, role }`; else **401**
-- [ ] 2.2.2 `requireRole('admin')` — else **403**
-- [ ] 2.2.3 Sign JWT with `{ sub, email, role, iat, exp }`, **24h** expiry
-- [ ] 2.2.4 Never log raw tokens or `JWT_SECRET`
+- [x] 2.2.1 `authenticateToken` — Bearer verify with `JWT_SECRET`; attach `{ sub, email, role }`; else **401**
+- [x] 2.2.2 `requireRole('admin')` — else **403**
+- [x] 2.2.3 Sign JWT with `{ sub, email, role, iat, exp }`, **24h** expiry
+- [x] 2.2.4 Never log raw tokens or `JWT_SECRET`
 
 **Definition of Done — Task 2.2**
 
-- [ ] Missing/malformed/expired tokens → 401
-- [ ] Non-admin on admin route → 403
-- [ ] Trace: FR-04, P8, NFR-02, NFR-06
+- [x] Missing/malformed/expired tokens → 401
+- [x] Non-admin on admin route → 403
+- [x] Trace: FR-04, P8, NFR-02, NFR-06
 
 ---
 
 ### Task 2.3 — Auth routes & login rate limit
 
-- [ ] 2.3.1 `POST /api/auth/login` — Zod validate; `bcrypt.compare`; return `{ token, user }`
-- [ ] 2.3.2 Invalid credentials → **401** (generic message)
-- [ ] 2.3.3 `express-rate-limit`: **10 req / 15 min / IP** on login (all attempts) → **429** `RATE_LIMITED`
-- [ ] 2.3.4 `GET /api/auth/me` — Bearer → current public user
-- [ ] 2.3.5 Document / set `trust proxy` when behind a reverse proxy
+- [x] 2.3.1 `POST /api/auth/login` — Zod validate; `bcrypt.compare`; return `{ token, user }`
+- [x] 2.3.2 Invalid credentials → **401** (generic message)
+- [x] 2.3.3 `express-rate-limit`: **10 req / 15 min / IP** on login (all attempts) → **429** `RATE_LIMITED`
+- [x] 2.3.4 `GET /api/auth/me` — Bearer → current public user
+- [x] 2.3.5 Document / set `trust proxy` when behind a reverse proxy
 
 **Definition of Done — Task 2.3**
 
-- [ ] Seed admin/agent can log in; bad password → 401
-- [ ] 11th login attempt within window → 429
-- [ ] `/api/auth/me` works with token; fails without
-- [ ] Trace: FR-02–FR-03, P10, NFR-04
+- [x] Seed admin/agent can log in; bad password → 401
+- [x] 11th login attempt within window → 429
+- [x] `/api/auth/me` works with token; fails without
+- [x] Trace: FR-02–FR-03, P10, NFR-04
 
 ---
 
 ### Task 2.4 — Users list API (assignee picker)
 
-- [ ] 2.4.1 `GET /api/users` — Bearer (`agent` + `admin`) → `User[]`
-- [ ] 2.4.2 Confirm no password fields in response
+- [x] 2.4.1 `GET /api/users` — Bearer (`agent` + `admin`) → `User[]`
+- [x] 2.4.2 Confirm no password fields in response
 
 **Definition of Done — Task 2.4**
 
-- [ ] Authenticated agent receives both seed users
-- [ ] Unauthenticated → 401
-- [ ] Trace: FR-12, P5
+- [x] Authenticated agent receives both seed users
+- [x] Unauthenticated → 401
+- [x] Trace: FR-12, P5
 
 ---
 
@@ -255,63 +254,63 @@
 
 ### Task 3.1 — Ticket & comment repositories
 
-- [ ] 3.1.1 Ticket CRUD queries with explicit columns + `toTicket()` mapper (ISO dates)
-- [ ] 3.1.2 List with optional `search` (`ILIKE` title OR description) AND optional `status`
-- [ ] 3.1.3 Find by id; update fields (title/description/priority/assigned_to); bump `updated_at`
-- [ ] 3.1.4 Comments: insert + list by `ticket_id` ordered by `created_at` ascending
-- [ ] 3.1.5 Status update helper used only inside transactional transition
+- [x] 3.1.1 Ticket CRUD queries with explicit columns + `toTicket()` mapper (ISO dates)
+- [x] 3.1.2 List with optional `search` (`ILIKE` title OR description) AND optional `status`
+- [x] 3.1.3 Find by id; update fields (title/description/priority/assigned_to); bump `updated_at`
+- [x] 3.1.4 Comments: insert + list by `ticket_id` ordered by `created_at` ascending
+- [x] 3.1.5 Status update helper used only inside transactional transition
 
 **Definition of Done — Task 3.1**
 
-- [ ] Search + status combine with AND
-- [ ] Mapping correct; no `password_hash` leakage via joins
-- [ ] All queries parameterized; no `SELECT *`
-- [ ] Trace: FR-06–FR-08, FR-10–FR-11, P7, P12
+- [x] Search + status combine with AND
+- [x] Mapping correct; no `password_hash` leakage via joins
+- [x] All queries parameterized; no `SELECT *`
+- [x] Trace: FR-06–FR-08, FR-10–FR-11, P7, P12
 
 ---
 
 ### Task 3.2 — `TicketStatusService` (state machine)
 
-- [ ] 3.2.1 Implement transition check from `TRANSITIONS` map
-- [ ] 3.2.2 `transition(ticketId, toStatus)` — `BEGIN` → `SELECT … FOR UPDATE` → validate → `UPDATE` → `COMMIT` / `ROLLBACK`
-- [ ] 3.2.3 Invalid → domain error mapped to **409** `INVALID_TRANSITION`
-- [ ] 3.2.4 Service callable with no HTTP server
-- [ ] 3.2.5 No status mutation elsewhere in codebase (grep-enforced)
+- [x] 3.2.1 Implement transition check from `TRANSITIONS` map
+- [x] 3.2.2 `transition(ticketId, toStatus)` — `BEGIN` → `SELECT … FOR UPDATE` → validate → `UPDATE` → `COMMIT` / `ROLLBACK`
+- [x] 3.2.3 Invalid → domain error mapped to **409** `INVALID_TRANSITION`
+- [x] 3.2.4 Service callable with no HTTP server
+- [x] 3.2.5 No status mutation elsewhere in codebase (grep-enforced)
 
 **Definition of Done — Task 3.2**
 
-- [ ] Allowed edges succeed; illegal edges leave status unchanged
-- [ ] Concurrent-safe design uses row lock
-- [ ] Trace: FR-09, P1–P3, NFR-10
+- [x] Allowed edges succeed; illegal edges leave status unchanged
+- [x] Concurrent-safe design uses row lock
+- [x] Trace: FR-09, P1–P3, NFR-10
 
 ---
 
 ### Task 3.3 — Ticket service & routes
 
-- [ ] 3.3.1 `POST /api/tickets` — force `Open`; `createdBy` from `req.user.sub`; reject client-supplied `status`
-- [ ] 3.3.2 `GET /api/tickets` — Zod query for `search`/`status`; Core returns all matches (no pagination)
-- [ ] 3.3.3 `GET /api/tickets/:id` — include comments; **404** if missing
-- [ ] 3.3.4 `PATCH /api/tickets/:id` — field updates only; **400 if `status` present**
-- [ ] 3.3.5 `PATCH /api/tickets/:id/status` — delegate solely to `TicketStatusService`
-- [ ] 3.3.6 All ticket routes behind `authenticateToken`
+- [x] 3.3.1 `POST /api/tickets` — force `Open`; `createdBy` from `req.user.sub`; reject client-supplied `status`
+- [x] 3.3.2 `GET /api/tickets` — Zod query for `search`/`status`; Core returns all matches (no pagination)
+- [x] 3.3.3 `GET /api/tickets/:id` — include comments; **404** if missing
+- [x] 3.3.4 `PATCH /api/tickets/:id` — field updates only; **400 if `status` present**
+- [x] 3.3.5 `PATCH /api/tickets/:id/status` — delegate solely to `TicketStatusService`
+- [x] 3.3.6 All ticket routes behind `authenticateToken`
 
 **Definition of Done — Task 3.3**
 
-- [ ] Smoke path: create → list → detail → patch fields → valid status → invalid status 409
-- [ ] General PATCH cannot change status (P4)
-- [ ] Trace: FR-05–FR-09, FR-11, FR-14
+- [x] Smoke path: create → list → detail → patch fields → valid status → invalid status 409
+- [x] General PATCH cannot change status (P4)
+- [x] Trace: FR-05–FR-09, FR-11, FR-14
 
 ---
 
 ### Task 3.4 — Comment routes
 
-- [ ] 3.4.1 `POST /api/tickets/:id/comments` — Zod `message`; `createdBy` from JWT; **404** if ticket missing
-- [ ] 3.4.2 Reject empty / too long / `<>` messages with **400**
+- [x] 3.4.1 `POST /api/tickets/:id/comments` — Zod `message`; `createdBy` from JWT; **404** if ticket missing
+- [x] 3.4.2 Reject empty / too long / `<>` messages with **400**
 
 **Definition of Done — Task 3.4**
 
-- [ ] Comment appears on subsequent detail fetch
-- [ ] Trace: FR-10, P6
+- [x] Comment appears on subsequent detail fetch
+- [x] Trace: FR-10, P6
 
 ---
 
@@ -321,16 +320,16 @@
 
 ### Task 4.1 — Admin user CRUD API
 
-- [ ] 4.1.1 `POST /api/users` — admin only; bcrypt hash cost **12**; unique email
-- [ ] 4.1.2 `PATCH /api/users/:id` — admin only; optional password rotate
-- [ ] 4.1.3 `DELETE /api/users/:id` — admin only; **409** on `created_by` RESTRICT conflicts
-- [ ] 4.1.4 Agent calling write routes → **403**
+- [x] 4.1.1 `POST /api/users` — admin only; bcrypt hash cost **12**; unique email
+- [x] 4.1.2 `PATCH /api/users/:id` — admin only; optional password rotate
+- [x] 4.1.3 `DELETE /api/users/:id` — admin only; **409** on `created_by` RESTRICT conflicts
+- [x] 4.1.4 Agent calling write routes → **403**
 
 **Definition of Done — Task 4.1**
 
-- [ ] Admin can create/update/delete users; agent cannot write
-- [ ] Responses never include password hashes
-- [ ] Trace: FR-16, P5, P8
+- [x] Admin can create/update/delete users; agent cannot write
+- [x] Responses never include password hashes
+- [x] Trace: FR-16, P5, P8
 
 ---
 
@@ -341,93 +340,93 @@
 
 ### Task 5.1 — API client & stores
 
-- [ ] 5.1.1 API client using `import.meta.env.VITE_API_URL`; attach Bearer from `authStore`
-- [ ] 5.1.2 Parse successes with Zod; errors with `apiErrorSchema`
-- [ ] 5.1.3 On **401**: clear auth + redirect `/login`
-- [ ] 5.1.4 Implement stores: `authStore`, `ticketStore`, `userStore`, `filterStore`, `uiStore`
-- [ ] 5.1.5 Stores hold data + async actions + loading/error — **no** authoritative status-machine rules (UI may use read-only `TRANSITIONS` for buttons only)
+- [x] 5.1.1 API client using `import.meta.env.VITE_API_URL`; attach Bearer from `authStore`
+- [x] 5.1.2 Parse successes with Zod; errors with `apiErrorSchema`
+- [x] 5.1.3 On **401**: clear auth + redirect `/login`
+- [x] 5.1.4 Implement stores: `authStore`, `ticketStore`, `userStore`, `filterStore`, `uiStore`
+- [x] 5.1.5 Stores hold data + async actions + loading/error — **no** authoritative status-machine rules (UI may use read-only `TRANSITIONS` for buttons only)
 
 **Definition of Done — Task 5.1**
 
-- [ ] Zustand is the source of truth for ticket/user lists (no dual Suspense ownership)
-- [ ] 401 path clears session
-- [ ] Trace: FR-03, FR-15, P13, P16
+- [x] Zustand is the source of truth for ticket/user lists (no dual Suspense ownership)
+- [x] 401 path clears session
+- [x] Trace: FR-03, FR-15, P13, P16
 
 ---
 
 ### Task 5.2 — Auth UI & route guards *[Project-Core Auth]*
 
-- [ ] 5.2.1 Login page — `<form action>` + `useActionState`; no duplicate pending flags in store
-- [ ] 5.2.2 Persist JWT in `sessionStorage`; hydrate via `GET /api/auth/me`
-- [ ] 5.2.3 `ProtectedRoute` → unauthenticated users to `/login`
-- [ ] 5.2.4 Hide admin nav until role resolved; show admin links only when `role === 'admin'`
-- [ ] 5.2.5 Logout clears session
+- [x] 5.2.1 Login page — `<form action>` + `useActionState`; no duplicate pending flags in store
+- [x] 5.2.2 Persist JWT in `sessionStorage`; hydrate via `GET /api/auth/me`
+- [x] 5.2.3 `ProtectedRoute` → unauthenticated users to `/login`
+- [x] 5.2.4 Hide admin nav until role resolved; show admin links only when `role === 'admin'`
+- [x] 5.2.5 Logout clears session
 
 **Definition of Done — Task 5.2**
 
-- [ ] Agent/admin can log in; refresh restores session for the tab
-- [ ] No admin UI flash for agent
-- [ ] Trace: FR-02–FR-04, NFR-14
+- [x] Agent/admin can log in; refresh restores session for the tab
+- [x] No admin UI flash for agent
+- [x] Trace: FR-02–FR-04, NFR-14
 
 ---
 
 ### Task 5.3 — Ticket list, search, filter
 
-- [ ] 5.3.1 Ticket list page — `useEffect` triggers `ticketStore.fetchTickets` from `filterStore`
-- [ ] 5.3.2 Search input + status filter controls (combinable)
-- [ ] 5.3.3 Loading skeleton (`animate-pulse`) and error `role="alert"`
-- [ ] 5.3.4 Status/priority badges using exact Tailwind maps from `tailwind-standards.mdc` (`STATUS_STYLES` const)
-- [ ] 5.3.5 Error boundary around route page
+- [x] 5.3.1 Ticket list page — `useEffect` triggers `ticketStore.fetchTickets` from `filterStore`
+- [x] 5.3.2 Search input + status filter controls (combinable)
+- [x] 5.3.3 Loading skeleton (`animate-pulse`) and error `role="alert"`
+- [x] 5.3.4 Status/priority badges using exact Tailwind maps from `tailwind-standards.mdc` (`STATUS_STYLES` const)
+- [x] 5.3.5 Error boundary around route page
 
 **Definition of Done — Task 5.3**
 
-- [ ] List shows DB tickets; search + status filter work end-to-end
-- [ ] Mobile-first layout; focus rings on controls
-- [ ] Trace: FR-06, FR-11, FR-15, NFR-14–NFR-15
+- [x] List shows DB tickets; search + status filter work end-to-end
+- [x] Mobile-first layout; focus rings on controls
+- [x] Trace: FR-06, FR-11, FR-15, NFR-14–NFR-15
 
 ---
 
 ### Task 5.4 — Create & update ticket forms
 
-- [ ] 5.4.1 Create ticket form — `useActionState`; fields title/description/priority/assignee
-- [ ] 5.4.2 Load users into assignee select via `userStore`
-- [ ] 5.4.3 Edit fields on detail — validation feedback, labeled inputs
-- [ ] 5.4.4 Named exports; one non-trivial component per file
+- [x] 5.4.1 Create ticket form — `useActionState`; fields title/description/priority/assignee
+- [x] 5.4.2 Load users into assignee select via `userStore`
+- [x] 5.4.3 Edit fields on detail — validation feedback, labeled inputs
+- [x] 5.4.4 Named exports; one non-trivial component per file
 
 **Definition of Done — Task 5.4**
 
-- [ ] User can create and update tickets from UI; data persists after refresh
-- [ ] Trace: FR-05, FR-08, FR-12
+- [x] User can create and update tickets from UI; data persists after refresh
+- [x] Trace: FR-05, FR-08, FR-12
 
 ---
 
 ### Task 5.5 — Ticket detail, comments, status transitions
 
-- [ ] 5.5.1 Detail page loads ticket + comments
-- [ ] 5.5.2 Comment form — `useOptimistic` + rollback on failure
-- [ ] 5.5.3 Status buttons only for `TRANSITIONS[current]`; none for `Closed` / `Cancelled`
-- [ ] 5.5.4 Status change — `useOptimistic`; on **409** show inline error + rollback (no full reload)
-- [ ] 5.5.5 Pending buttons use `disabled:opacity-50 disabled:cursor-not-allowed`
-- [ ] 5.5.6 Render user content as text children only — never `dangerouslySetInnerHTML`
+- [x] 5.5.1 Detail page loads ticket + comments
+- [x] 5.5.2 Comment form — `useOptimistic` + rollback on failure
+- [x] 5.5.3 Status buttons only for `TRANSITIONS[current]`; none for `Closed` / `Cancelled`
+- [x] 5.5.4 Status change — `useOptimistic`; on **409** show inline error + rollback (no full reload)
+- [x] 5.5.5 Pending buttons use `disabled:opacity-50 disabled:cursor-not-allowed`
+- [x] 5.5.6 Render user content as text children only — never `dangerouslySetInnerHTML`
 
 **Definition of Done — Task 5.5**
 
-- [ ] UI transition buttons match `spec.md` §4; 409 handled inline
-- [ ] Comments appear without losing thread context
-- [ ] Trace: FR-07, FR-09–FR-10, P6, P13
+- [x] UI transition buttons match `spec.md` §4; 409 handled inline
+- [x] Comments appear without losing thread context
+- [x] Trace: FR-07, FR-09–FR-10, P6, P13
 
 ---
 
 ### Task 5.6 — Admin user management UI *[Stretch]*
 
-- [ ] 5.6.1 Admin-only users page (create/edit/delete)
-- [ ] 5.6.2 Wired to Wave 4 APIs; agent cannot navigate (hidden + route guard)
-- [ ] 5.6.3 Tailwind form patterns + accessible errors
+- [x] 5.6.1 Admin-only users page (create/edit/delete)
+- [x] 5.6.2 Wired to Wave 4 APIs; agent cannot navigate (hidden + route guard)
+- [x] 5.6.3 Tailwind form patterns + accessible errors
 
 **Definition of Done — Task 5.6**
 
-- [ ] Admin can manage users from UI; agent cannot access
-- [ ] Trace: FR-16
+- [x] Admin can manage users from UI; agent cannot access
+- [x] Trace: FR-16
 
 ---
 
@@ -439,46 +438,46 @@
 
 ### Task 6.1 — Backend test harness (Vitest + Supertest)
 
-- [ ] 6.1.1 Vitest config for backend; script `test`
-- [ ] 6.1.2 Test DB (or transactional rollback) + migrate/seed strategy documented
-- [ ] 6.1.3 Helper to create authenticated agent/admin tokens for supertest
-- [ ] 6.1.4 Export `app` without listening
+- [x] 6.1.1 Vitest config for backend; script `test`
+- [x] 6.1.2 Test DB (or transactional rollback) + migrate/seed strategy documented
+- [x] 6.1.3 Helper to create authenticated agent/admin tokens for supertest
+- [x] 6.1.4 Export `app` without listening
 
 **Definition of Done — Task 6.1**
 
-- [ ] Backend `npm test` runs cleanly against isolated test data
-- [ ] Trace: Spec §9.1, FR-09
+- [x] Backend `npm test` runs cleanly against isolated test data
+- [x] Trace: Spec §9.1, FR-09
 
 ---
 
 ### Task 6.2 — State-machine integration tests (Core mandatory)
 
-- [ ] 6.2.1 Allowed transitions: Open→In Progress→Resolved→Closed; Open→Cancelled; In Progress→Cancelled — each succeeds and persists
-- [ ] 6.2.2 Illegal transitions return **409**; status unchanged (assert DB row)
-- [ ] 6.2.3 `Closed` and `Cancelled` reject all transition attempts (**409**)
-- [ ] 6.2.4 `PATCH /api/tickets/:id` with `status` → **400**; status unchanged
-- [ ] 6.2.5 Do **not** mock `TicketStatusService` in these tests
-- [ ] 6.2.6 Sequential conflicting transitions demonstrate consistent outcomes with `FOR UPDATE`
+- [x] 6.2.1 Allowed transitions: Open→In Progress→Resolved→Closed; Open→Cancelled; In Progress→Cancelled — each succeeds and persists
+- [x] 6.2.2 Illegal transitions return **409**; status unchanged (assert DB row)
+- [x] 6.2.3 `Closed` and `Cancelled` reject all transition attempts (**409**)
+- [x] 6.2.4 `PATCH /api/tickets/:id` with `status` → **400**; status unchanged
+- [x] 6.2.5 Do **not** mock `TicketStatusService` in these tests
+- [x] 6.2.6 Sequential conflicting transitions demonstrate consistent outcomes with `FOR UPDATE`
 
 **Definition of Done — Task 6.2**
 
-- [ ] All Core state-machine tests green locally
-- [ ] Trace: FR-09, Spec §9.4, P1–P4
+- [x] All Core state-machine tests green locally
+- [x] Trace: FR-09, Spec §9.4, P1–P4
 
 ---
 
 ### Task 6.3 — Broader API integration tests (Vitest + Supertest)
 
-- [ ] 6.3.1 Validation: empty title, oversized fields, `<>` in text → **400**
-- [ ] 6.3.2 Search / status / combined AND filter cases
-- [ ] 6.3.3 Comments create + appear on detail
-- [ ] 6.3.4 Auth: no token → **401**; bad login → **401**; agent on admin write → **403**
-- [ ] 6.3.5 Login rate limit → **429** (may be isolated / slow-test tagged)
+- [x] 6.3.1 Validation: empty title, oversized fields, `<>` in text → **400**
+- [x] 6.3.2 Search / status / combined AND filter cases
+- [x] 6.3.3 Comments create + appear on detail
+- [x] 6.3.4 Auth: no token → **401**; bad login → **401**; agent on admin write → **403**
+- [x] 6.3.5 Login rate limit → **429** (may be isolated / slow-test tagged)
 
 **Definition of Done — Task 6.3**
 
-- [ ] Suite covers FR-02, FR-05–FR-08, FR-10–FR-12, FR-14 smoke paths
-- [ ] Trace: Spec §9.1–9.2
+- [x] Suite covers FR-02, FR-05–FR-08, FR-10–FR-12, FR-14 smoke paths
+- [x] Trace: Spec §9.1–9.2
 
 ---
 
@@ -486,35 +485,35 @@
 
 *Encode `spec.md` §11 Correctness Properties as automated checks*
 
-- [ ] 6.4.1 Property: every successful create yields `status === 'Open'` (create invariant / P1)
-- [ ] 6.4.2 Table-driven: for all status pairs, API allows iff edge is ✓ in §4.2 (P2)
-- [ ] 6.4.3 Property: invalid transition leaves row snapshot equal (P3)
-- [ ] 6.4.4 Property: no response body key matches `/password/i` on user/auth payloads (P5)
-- [ ] 6.4.5 Property: `search` ∩ `status` results equal intersection of separate queries
-- [ ] 6.4.6 Unit table test for pure `TRANSITIONS` helper
+- [x] 6.4.1 Property: every successful create yields `status === 'Open'` (create invariant / P1)
+- [x] 6.4.2 Table-driven: for all status pairs, API allows iff edge is ✓ in §4.2 (P2)
+- [x] 6.4.3 Property: invalid transition leaves row snapshot equal (P3)
+- [x] 6.4.4 Property: no response body key matches `/password/i` on user/auth payloads (P5)
+- [x] 6.4.5 Property: `search` ∩ `status` results equal intersection of separate queries
+- [x] 6.4.6 Unit table test for pure `TRANSITIONS` helper
 - [ ] 6.4.7 Optional: property-based library (e.g. fast-check) for random illegal edges → always 409
 
 **Definition of Done — Task 6.4**
 
-- [ ] Properties P2, P3, P5 (and create→Open) have automated coverage
-- [ ] Pure transition map unit tests pass
-- [ ] Trace: Spec §11
+- [x] Properties P2, P3, P5 (and create→Open) have automated coverage
+- [x] Pure transition map unit tests pass
+- [x] Trace: Spec §11
 
 ---
 
 ### Task 6.5 — Frontend tests (Vitest + RTL)
 
-- [ ] 6.5.1 Configure Vitest + jsdom + `@testing-library/react` / `user-event` in `frontend/`
-- [ ] 6.5.2 `ProtectedRoute`: unauthenticated user redirected to `/login`
-- [ ] 6.5.3 Status button set: only valid next statuses rendered; none for `Closed` / `Cancelled`
-- [ ] 6.5.4 Status change: on mocked **409**, optimistic UI rolls back and inline error appears (no navigation)
-- [ ] 6.5.5 Login form: pending/error via `useActionState` path (or store-backed action) is testable
-- [ ] 6.5.6 Colocate as `ComponentName.test.tsx`
+- [x] 6.5.1 Configure Vitest + jsdom + `@testing-library/react` / `user-event` in `frontend/`
+- [x] 6.5.2 `ProtectedRoute`: unauthenticated user redirected to `/login`
+- [x] 6.5.3 Status button set: only valid next statuses rendered; none for `Closed` / `Cancelled`
+- [x] 6.5.4 Status change: on mocked **409**, optimistic UI rolls back and inline error appears (no navigation)
+- [x] 6.5.5 Login form: pending/error via `useActionState` path (or store-backed action) is testable
+- [x] 6.5.6 Colocate as `ComponentName.test.tsx`
 
 **Definition of Done — Task 6.5**
 
-- [ ] Frontend `npm test` runs green for the cases above
-- [ ] Trace: FR-04, FR-09, FR-15, Spec §9.2 / FR-21 (frontend portion)
+- [x] Frontend `npm test` runs green for the cases above
+- [x] Trace: FR-04, FR-09, FR-15, Spec §9.2 / FR-21 (frontend portion)
 
 ---
 
@@ -524,44 +523,44 @@
 
 ### Task 7.1 — README & env docs
 
-- [ ] 7.1.1 Prerequisites (Node 22, PostgreSQL)
-- [ ] 7.1.2 Setup: install, `.env`, migrate, seed, run API, run UI, run backend tests, run frontend tests
-- [ ] 7.1.3 Seed credentials table (README only)
-- [ ] 7.1.4 Architecture sketch (layers + state machine pointer to `spec.md`)
+- [x] 7.1.1 Prerequisites (Node 22, PostgreSQL)
+- [x] 7.1.2 Setup: install, `.env`, migrate, seed, run API, run UI, run backend tests, run frontend tests
+- [x] 7.1.3 Seed credentials table (README only)
+- [x] 7.1.4 Architecture sketch (layers + state machine pointer to `spec.md`)
 
 **Definition of Done — Task 7.1**
 
-- [ ] A clean machine can run the app from README alone
-- [ ] Trace: FR-13, NFR-18, raw-requirements completion checklist
+- [x] A clean machine can run the app from README alone
+- [x] Trace: FR-13, NFR-18, raw-requirements completion checklist
 
 ---
 
 ### Task 7.2 — Cursor workflow & lifecycle docs
 
-- [ ] 7.2.1 Keep `project-context.md`, `spec.md`, `tasks.md` (this file) current as behavior ships
-- [ ] 7.2.2 Write `acceptance-criteria.md` (trace FR → API/UI/tests)
-- [ ] 7.2.3 Write `cursor-rules-or-instructions.md` (how `.cursor/rules/` are used during generation)
-- [ ] 7.2.4 Maintain prompt history / requirement analysis / design notes / reflection / PR description per exercise
-- [ ] 7.2.5 Write root `tool-workflow.md` (Part A)
-- [ ] 7.2.6 Optionally capture reusable prompts under `ai-prompts/`
+- [x] 7.2.1 Keep `project-context.md`, `spec.md`, `tasks.md` (this file) current as behavior ships
+- [x] 7.2.2 Write `acceptance-criteria.md` (trace FR → API/UI/tests)
+- [x] 7.2.3 Write `cursor-rules-or-instructions.md` (how `.cursor/rules/` are used during generation)
+- [x] 7.2.4 Maintain prompt history / requirement analysis / design notes / reflection / PR description per exercise
+- [x] 7.2.5 Write root `tool-workflow.md` (Part A)
+- [ ] 7.2.6 Optionally capture reusable prompts under `ai-prompts/` *(optional — skip; templates live in `cursor-rules-or-instructions.md`)*
 
 **Definition of Done — Task 7.2**
 
-- [ ] Cursor submission folder complete per `raw-requirements.md` Tool-Specific Expectations
-- [ ] Artifacts show iteration and ownership, not only final code
-- [ ] Trace: FR-22, Part A/C of exercise
+- [x] Cursor submission folder complete per `raw-requirements.md` Tool-Specific Expectations
+- [x] Artifacts show iteration and ownership, not only final code
+- [x] Trace: FR-22, Part A/C of exercise
 
 ---
 
 ### Task 7.3 — Design / debugging notes *(exercise artifacts)*
 
-- [ ] 7.3.1 `docs/design-notes.md` — key decisions (JWT in sessionStorage, `pg_trgm`+ILIKE, duplicated Zod, layered backend)
-- [ ] 7.3.2 Short debugging / review notes with at least one example of correcting AI output against rules
+- [x] 7.3.1 `docs/design-notes.md` — key decisions (JWT in sessionStorage, `pg_trgm`+ILIKE, duplicated Zod, layered backend)
+- [x] 7.3.2 Short debugging / review notes with at least one example of correcting AI output against rules
 
 **Definition of Done — Task 7.3**
 
-- [ ] Design and review evidence exists in-repo for feedback review
-- [ ] Trace: raw-requirements “What Good Looks Like”
+- [x] Design and review evidence exists in-repo for feedback review
+- [x] Trace: raw-requirements “What Good Looks Like”
 
 ---
 
@@ -588,14 +587,14 @@
 
 *Spec: FR-19*
 
-- [ ] 8.2.1 Generate or hand-maintain OpenAPI 3 doc for all implemented endpoints
-- [ ] 8.2.2 Serve Swagger UI in development (optional) or commit `openapi.yaml`
-- [ ] 8.2.3 Schemas match Zod domain types; errors match `spec.md` §8 wire contract
+- [x] 8.2.1 Generate or hand-maintain OpenAPI 3 doc for all implemented endpoints
+- [x] 8.2.2 Serve Swagger UI in development (optional) or commit `openapi.yaml`
+- [x] 8.2.3 Schemas match Zod domain types; errors match `spec.md` §8 wire contract
 
 **Definition of Done — Task 8.2**
 
-- [ ] An external reader can call the API from the document alone
-- [ ] Trace: FR-19
+- [x] An external reader can call the API from the document alone
+- [x] Trace: FR-19
 
 ---
 
@@ -603,15 +602,15 @@
 
 *Spec: FR-20*
 
-- [ ] 8.3.1 `Dockerfile` for backend (and optional frontend)
-- [ ] 8.3.2 `docker-compose.yml` — Postgres + API (+ UI optional)
-- [ ] 8.3.3 Document compose up / migrate / seed in README
-- [ ] 8.3.4 No secrets baked into images
+- [x] 8.3.1 `Dockerfile` for backend (and optional frontend)
+- [x] 8.3.2 `docker-compose.yml` — Postgres + API (+ UI optional)
+- [x] 8.3.3 Document compose up / migrate / seed in README
+- [x] 8.3.4 No secrets baked into images
 
 **Definition of Done — Task 8.3**
 
-- [ ] `docker compose up` yields a working stack per README
-- [ ] Trace: FR-20
+- [x] `docker compose up` yields a working stack per README
+- [x] Trace: FR-20
 
 ---
 
@@ -620,14 +619,14 @@
 *Spec: FR-20*  
 *Note: `.github/workflows/` folder already exists — add the workflow file*
 
-- [ ] 8.4.1 `.github/workflows/ci.yml` — install, typecheck, backend Vitest+Supertest, frontend Vitest+RTL
-- [ ] 8.4.2 Postgres service container for integration tests
-- [ ] 8.4.3 Fail CI on test or type errors
+- [x] 8.4.1 `.github/workflows/ci.yml` — install, typecheck, backend Vitest+Supertest, frontend Vitest+RTL
+- [x] 8.4.2 Postgres service container for integration tests
+- [x] 8.4.3 Fail CI on test or type errors
 
 **Definition of Done — Task 8.4**
 
-- [ ] Push/PR runs green on the main path
-- [ ] Trace: FR-20
+- [x] Push/PR runs green on the main path
+- [x] Trace: FR-20
 
 ---
 
@@ -675,8 +674,8 @@
 
 ### Exercise submission gate (Wave 7)
 
-- [ ] Cursor workflow docs complete (`acceptance-criteria.md`, `cursor-rules-or-instructions.md`, etc.)
-- [ ] Prompt history, reflection, PR description, `tool-workflow.md` present
+- [x] Cursor workflow docs complete (`acceptance-criteria.md`, `cursor-rules-or-instructions.md`, etc.)
+- [x] Prompt history, reflection, PR description, `tool-workflow.md` present
 
 ### Stretch gate (Wave 4, 5.6, 8.x)
 
