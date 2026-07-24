@@ -1,0 +1,103 @@
+---
+description: Tailwind CSS 4 Standards & Conventions for the Support Ticket Management System — component files, CSS, and Tailwind config under frontend/
+globs: frontend/**/*.tsx,frontend/**/*.css,frontend/tailwind.config.*,frontend/postcss.config.*
+alwaysApply: false
+---
+
+# Tailwind CSS 4 Standards & Conventions
+
+Styling in `frontend/` is utility-first Tailwind CSS 4.
+
+## Allowed CSS Entry (exception)
+
+**Exactly one** CSS entry file is required and allowed, e.g. `frontend/src/index.css`:
+
+```css
+@import "tailwindcss";
+
+/* Optional design tokens */
+@theme {
+  /* only if needed — prefer default Tailwind scale */
+}
+```
+
+Import that file once from the app entry (`main.tsx`). No other custom CSS files. No `style={{}}` in components. No `@apply` for component classes — extract React components instead.
+
+Do not require a legacy `tailwind.config.js` for Core. If a config file exists, keep it minimal; prefer `@import "tailwindcss"` + `@theme` for v4.
+
+## Utilities Only in Components
+
+```tsx
+// ✅
+<button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+  Create Ticket
+</button>
+
+// ❌
+<button style={{ backgroundColor: 'blue' }}>Create Ticket</button>
+<button className="btn-primary">Create Ticket</button>
+```
+
+## Layout
+
+Mobile-first (`sm:`, `md:`, `lg:`, `xl:`). `flex` for 1D, `grid` for 2D; prefer `gap-*` over sibling margins. Page shell: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8`; root `min-h-screen`.
+
+## Status & Priority Colors
+
+Use these exact mappings everywhere status/priority appears:
+
+| Status | Classes |
+|---|---|
+| Open | `bg-gray-100 text-gray-800` |
+| In Progress | `bg-yellow-100 text-yellow-800` |
+| Resolved | `bg-green-100 text-green-800` |
+| Closed | `bg-purple-100 text-purple-800` |
+| Cancelled | `bg-red-100 text-red-800` |
+
+| Priority | Classes |
+|---|---|
+| low | `bg-blue-100 text-blue-800` |
+| medium | `bg-yellow-100 text-yellow-800` |
+| high | `bg-red-100 text-red-800` |
+
+Primary actions: `bg-blue-600 hover:bg-blue-700 text-white`.
+
+Centralize in a const map (e.g. `STATUS_STYLES`) — do not invent alternate palette classes per screen.
+
+**Transition buttons:** only for reachable next statuses; `disabled:opacity-50 disabled:cursor-not-allowed` while pending; terminal `Closed`/`Cancelled` → badge only, no buttons.
+
+## Typography & Spacing
+
+- Titles: `text-2xl font-bold` / sections `text-xl font-semibold` / cards `text-lg font-medium`
+- Meta: `text-sm text-gray-500`; body `text-base` / `text-gray-700`
+- Truncate titles with `truncate`; descriptions `line-clamp-2` / `line-clamp-3`
+- Spacing: `p-4`/`p-6`, `space-y-4` in forms, `gap-6` between sections, page `px-4 sm:px-6 lg:px-8 py-6`
+- Cards: `rounded-lg border border-gray-200 bg-white p-6 shadow-sm`
+- Avoid arbitrary values (`w-[137px]`) unless no scale token fits
+
+## Forms & Focus
+
+Labeled inputs; error → red border/ring + `role="alert"` message. Every control needs hover/focus/disabled. Never use `outline-none` without `focus:ring-*`.
+
+```tsx
+className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium
+  hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none
+  disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+```
+
+Icon-only buttons: `<span className="sr-only">…</span>`. Body text on white no lighter than `text-gray-600`. Skeletons `animate-pulse`; spinners `animate-spin`.
+
+## Dark Mode
+
+**Out of scope for Core.** Do not add `dark:` variants unless a Stretch task explicitly asks. If added later, use a class-based variant consistently and pair every light utility with a `dark:` counterpart.
+
+## Validation Checklist
+
+1. ✅ Single Tailwind v4 CSS entry with `@import "tailwindcss"` — no other custom CSS
+2. ✅ No `@apply`, no inline styles
+3. ✅ Mobile-first responsive prefixes
+4. ✅ Hover/focus/disabled on interactive elements; focus ring always present
+5. ✅ Exact status/priority color maps
+6. ✅ Terminal statuses render no transition buttons
+7. ✅ No dark mode unless explicitly requested
+8. ✅ WCAG AA: no informational text lighter than `gray-600` on white

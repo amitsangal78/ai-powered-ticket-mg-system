@@ -1,0 +1,55 @@
+---
+description: Frontend & Backend Coding Standards for the Support Ticket Management System — Node/Express/TypeScript backend in backend/, React/Vite/Tailwind frontend in frontend/
+globs: frontend/**/*.ts,frontend/**/*.tsx,backend/**/*.ts
+alwaysApply: true
+---
+
+# Frontend & Backend Coding Standards — Support Ticket Management System
+
+Internal support ticket tool: authenticated users (`agent` / `admin`) create, update, comment on, search, and progress tickets through an enforced status lifecycle; admins manage users. Frontend in `frontend/` (React 19, Vite 6, Zustand 5, Tailwind CSS 4), backend in `backend/` (Node.js 22, Express 5, TypeScript 5.x, `pg`), data in PostgreSQL.
+
+This file is the **overview**. Defer to the scoped rules when they go deeper:
+- Backend details → `nodejs-backend-patterns.mdc`
+- SQL / schema → `database-standards.mdc`
+- Types / Zod → `typescript-strict.mdc`
+- React / Zustand → `react19-standards.mdc`
+- Tailwind → `tailwind-standards.mdc`
+
+Auth (JWT + roles) is **in scope for this project** even though the exercise marks it Stretch — implement it.
+
+## Architecture
+
+**Backend layers** (`backend/src/`): routes → services → repositories. Routes own HTTP + Zod validation only. Services own business logic (`TicketStatusService` owns the entire status state machine). Repositories own SQL via `pg` — never query the DB from a route. Never skip a layer.
+
+**Frontend state**: five Zustand stores — `authStore`, `ticketStore`, `userStore`, `filterStore`, `uiStore`. Stores hold data + async API wrappers; **no business rules** (status transitions are server-enforced; UI only filters which buttons to show). Data loading is store-driven (see `react19-standards.mdc`), not Suspense/`use(Promise)`-first.
+
+**Naming**: TypeScript and JSON APIs use `camelCase`. PostgreSQL columns use `snake_case`. Map at the repository boundary (`assigned_to` → `assignedTo`). Never leak `passwordHash` / `password_hash` past the repository/service boundary.
+
+## Security & API (summary)
+
+- Validate every request body, query param, and route param with Zod at the route boundary; derive types with `z.infer`; strip unknown keys.
+- Persist **plain text only** for `title`, `description`, `message` — Zod length limits; reject values containing `<` or `>`. Do **not** run an HTML sanitizer library on store. Frontend renders with normal React text children — never `dangerouslySetInnerHTML` for user content.
+- Parameterized SQL only (`$1`, `$2`, …). Passwords: `await bcrypt.hash(password, 12)` (cost ≥ 10). Random IDs/tokens: `node:crypto` (`randomUUID`, etc.) — bcrypt is the exception for password hashing.
+- Protected routes: `authenticateToken` then optional `requireRole('admin')`. JWT payload `{ sub, email, role, iat, exp }`, 24h expiry. `JWT_SECRET` and `DATABASE_URL` from env only (validated at boot).
+- Error wire format (success returns the resource/data directly): `{ error: string, code: string, details?: unknown }` with matching HTTP status (400 / 401 / 403 / 404 / 409 / 429 / 500).
+- Rate-limit `POST /api/auth/login`: **10 requests / 15 min / IP** (all attempts) → 429. CORS allowlist = `FRONTEND_ORIGIN` only. Use `helmet` + explicit CORS (details in backend rules).
+- Authorization model: any authenticated `agent` or `admin` may read/update any ticket and comment (internal tool). User CRUD is `admin` only. `GET /api/users` is available to both roles (assignee picker).
+
+## Frontend UX (summary)
+
+- `authStore` keeps JWT in `sessionStorage`, attaches `Authorization: Bearer`, clears + redirects to `/login` on 401.
+- Every store-driven fetch exposes loading/error in the store or `uiStore`. Forms use React 19 `useActionState` where they submit; comments/status use `useOptimistic` with rollback on 409.
+- Status buttons only for valid transitions: `Open` → In Progress / Cancelled; `In Progress` → Resolved / Cancelled; `Resolved` → Closed; `Closed` / `Cancelled` → none. Show 409 inline, no reload.
+- Admin-only nav/routes render only **when** `role === 'admin'` (hide, don’t disable); wait until session restore finishes before rendering role-dependent UI.
+- Accessibility: keyboard-navigable controls, labeled inputs, `aria-live` for errors, WCAG 2.1 AA contrast, focus trap in modals.
+
+## Code Quality Checks
+
+1. ✅ Zod at every route input; types from `z.infer`
+2. ✅ Parameterized SQL only; snake_case ↔ camelCase in repositories
+3. ✅ No `passwordHash` in any API response or client type
+4. ✅ Loading + error states for async UI; 409 shown inline for bad transitions
+5. ✅ Status changes only via `TicketStatusService` / `PATCH .../status`
+6. ✅ `authenticateToken` / `requireRole('admin')` on the right routes
+7. ✅ No secrets in source — env validated at startup
+8. ✅ Tailwind utilities only (plus the single Tailwind v4 CSS entry file)

@@ -1,0 +1,145 @@
+---
+description: PostgreSQL Database Validation & Security Standards for the Support Ticket Management System — migrations, seed scripts, repositories, and any PostgreSQL-touching file
+globs: **/*.sql,backend/migrations/**,backend/**/repositories/**,backend/**/db/**,backend/**seed**
+alwaysApply: false
+---
+
+# PostgreSQL Database Standards
+
+Schema: three tables — `users`, `tickets`, `comments`. Access only through `backend/` repositories using **`pg`**. SQL is `snake_case`; application types are `camelCase` — **repositories map both ways** and never return `password_hash`.
+
+## Query Security
+
+Always parameterize (`$1`, `$2`, …). Never interpolate user input into SQL (including template literals).
+
+```typescript
+// ✅ CORRECT — parameterized + explicit columns
+const { rows } = await pool.query(
+  `SELECT id, title, description, priority, status,
+          assigned_to, created_by, created_at, updated_at
+   FROM tickets WHERE id = $1`,
+  [ticketId]
+);
+
+// ❌ WRONG — injection + SELECT *
+await pool.query(`SELECT * FROM tickets WHERE id = '${ticketId}'`);
+```
+
+**Never use `SELECT *`** in application queries. Always list columns. Omit `password_hash` from every user SELECT that feeds an API response.
+
+## Schema
+
+UUID PKs via `gen_random_uuid()` (`pgcrypto`). No serial integer PKs.
+
+```
+users     — id UUID PK, name, email, role (agent|admin),
+            password_hash, created_at, updated_at
+            UNIQUE on LOWER(email)
+
+tickets   — id UUID PK, title (<=200), description (<=5000),
+            priority (low|medium|high),
+            status (Open|In Progress|Resolved|Closed|Cancelled),
+            assigned_to UUID FK -> users.id  (ON DELETE SET NULL, nullable),
+            created_by  UUID FK -> users.id  (ON DELETE RESTRICT),
+            created_at, updated_at  (timestamptz)
+            status DEFAULT 'Open'; timestamps DEFAULT NOW()
+
+comments  — id UUID PK, ticket_id UUID FK -> tickets.id (ON DELETE CASCADE),
+            message (<=2000),
+            created_by UUID FK -> users.id (ON DELETE RESTRICT),
+            created_at (timestamptz)
+```
+
+DB CHECK constraints (not app-only):
+
+```sql
+CONSTRAINT valid_status   CHECK (status IN ('Open', 'In Progress', 'Resolved', 'Closed', 'Cancelled'))
+CONSTRAINT valid_priority CHECK (priority IN ('low', 'medium', 'high'))
+CONSTRAINT valid_role     CHECK (role IN ('agent', 'admin'))
+CONSTRAINT title_length       CHECK (char_length(title) <= 200)
+CONSTRAINT description_length CHECK (char_length(description) <= 5000)
+CONSTRAINT comment_length     CHECK (char_length(message) <= 2000)
+CONSTRAINT name_length        CHECK (char_length(name) <= 100)
+```
+
+Use **`timestamptz`** for all timestamps. API exposes ISO-8601 strings (`date.toISOString()`).
+
+## Migrations
+
+- Location: `backend/migrations/` (or `database/migrations/` if the runner is wired there — one place only; prefer `backend/migrations/`).
+- Names: `001_enable_pgcrypto.sql`, `002_create_users.sql`, `003_create_tickets.sql`, `004_create_comments.sql`, `005_create_indexes.sql`.
+- Apply-once via a migrations table (e.g. `schema_migrations`). Do **not** rely on `IF NOT EXISTS` as the primary idempotency strategy for tables (except extensions: `CREATE EXTENSION IF NOT EXISTS pgcrypto`).
+- Order: pgcrypto → users → tickets → comments → indexes.
+- Running the full sequence on an empty DB must yield the complete schema.
+
+### Indexes
+
+- FKs: `tickets.created_by`, `tickets.assigned_to`, `comments.ticket_id`, `comments.created_by`
+- Filter: `tickets.status`
+- Login: `CREATE UNIQUE INDEX idx_users_email_lower ON users (LOWER(email))`
+- **Keyword search (chosen approach):** `pg_trgm` + GIN on `title` and `description`:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX idx_tickets_title_trgm ON tickets USING gin (title gin_trgm_ops);
+CREATE INDEX idx_tickets_description_trgm ON tickets USING gin (description gin_trgm_ops);
+```
+
+Repository search: case-insensitive `ILIKE` on title OR description, combinable with `status = $n`. Do not use `to_tsvector` for Core unless you replace this approach entirely (pick one — this project uses `pg_trgm` + `ILIKE`).
+
+## Seed Script
+
+Idempotent (`ON CONFLICT DO NOTHING` on email unique path or existence check):
+
+- `admin@example.com` / `Admin123!` — role `admin`
+- `agent@example.com` / `Agent123!` — role `agent`
+
+Hash with `await bcrypt.hash(..., 12)` at seed runtime — never commit plaintext or precomputed hashes in SQL. Document credentials in README only, not in code comments.
+
+## Connection Pool
+
+- `DATABASE_URL` from env only.
+- Pool `max: 20` in development; `statement_timeout: '30s'`.
+- Production: `ssl: { rejectUnauthorized: true }`.
+- On pool errors: log without the full URL; prefer 503 when exhausted rather than crash.
+- Status transitions and multi-step writes: short transactions; **no** external HTTP inside a transaction. Use `SELECT ... FOR UPDATE` when changing ticket status (see backend rules).
+
+## Repository Mapping
+
+```typescript
+// DB row → API DTO (illustrative)
+function toTicket(row: TicketRow): Ticket {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    priority: row.priority,
+    status: row.status,
+    assignedTo: row.assigned_to,
+    createdBy: row.created_by,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
+```
+
+Translate PostgreSQL errors at the repo/service boundary:
+
+| Code | Meaning | HTTP |
+|---|---|---|
+| `23505` | unique_violation | 409 |
+| `23503` | foreign_key_violation | 409 |
+| `23502` | not_null_violation | 400 |
+| `23514` | check_violation | 400 |
+
+## Validation Checklist
+
+1. ✅ Parameterized queries; no `SELECT *`
+2. ✅ UUID PKs + `timestamptz`; CHECK constraints for enums/lengths
+3. ✅ `LOWER(email)` unique index; FK ON DELETE as specified
+4. ✅ Apply-once migrations with ordered numeric prefixes
+5. ✅ Search via `pg_trgm` + `ILIKE` (not full-text)
+6. ✅ Seed hashes passwords at runtime; idempotent
+7. ✅ Repositories map snake_case ↔ camelCase; never return `password_hash`
+8. ✅ Pool limits, statement timeout, SSL in production
+9. ✅ Status updates use transactional `FOR UPDATE`

@@ -1,0 +1,138 @@
+---
+description: Node.js 22 / Express 5 Backend Performance & Security Patterns for the Support Ticket Management System — routes, services, repositories, middleware under backend/
+globs: backend/**/routes/**,backend/**/services/**,backend/**/repositories/**,backend/**/middleware/**,backend/**/api/**,backend/src/**
+alwaysApply: false
+---
+
+# Node.js 22 / Express 5 Backend Patterns
+
+Applies to `backend/` routes, services, repositories, and middleware. Data access uses the **`pg` pool only** (not Prisma/Kysely).
+
+## API Surface
+
+| Method & Path | Auth | Notes |
+|---|---|---|
+| `GET /api/health` | public | `{ status: 'ok' }` — no DB required |
+| `POST /api/auth/login` | public | returns `{ token, user }` (user without password) |
+| `GET /api/auth/me` | Bearer | current user |
+| `POST /api/tickets` | Bearer | create; default status `Open` |
+| `GET /api/tickets` | Bearer | `?search=` and `?status=` combinable; no pagination in Core (return all matches) |
+| `GET /api/tickets/:id` | Bearer | includes comments |
+| `PATCH /api/tickets/:id` | Bearer | title/description/priority/assignedTo only — reject body `status` with 400 |
+| `PATCH /api/tickets/:id/status` | Bearer | state machine; 409 if invalid |
+| `POST /api/tickets/:id/comments` | Bearer | create comment |
+| `GET /api/users` | Bearer | agent + admin (assignee list) |
+| `POST/PATCH/DELETE /api/users/:id` | Bearer + admin | user CRUD (Stretch UI) |
+
+Unknown routes: `404` with `{ error, code: 'NOT_FOUND' }`.
+
+## Boot & Config
+
+Validate env with Zod **before** listening. Required: `DATABASE_URL`, `JWT_SECRET` (min 32 chars), `FRONTEND_ORIGIN` (e.g. `http://localhost:5173`), `PORT` (default `3000`). Missing/invalid env → exit 1 with a clear message. Never read secrets with hardcoded fallbacks.
+
+```typescript
+const envSchema = z.object({
+  DATABASE_URL: z.string().min(1),
+  JWT_SECRET: z.string().min(32),
+  FRONTEND_ORIGIN: z.string().url(),
+  PORT: z.coerce.number().default(3000),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+});
+```
+
+## Middleware Stack (order)
+
+1. `helmet()` (security headers)
+2. `cors({ origin: env.FRONTEND_ORIGIN, methods: ['GET','POST','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'], credentials: false })`
+3. `express.json({ limit: '100kb' })`
+4. Request logger (pino-http or equivalent)
+5. Routes
+6. `404` handler
+7. Global error handler (last)
+
+If behind a reverse proxy, set `app.set('trust proxy', 1)` so rate limiting sees the real IP.
+
+## Logging
+
+Use **pino** (JSON logs). Levels: `error` / `warn` / `info` / `debug`. Include `reqId` when available. **Never** log passwords, JWTs, `JWT_SECRET`, full `DATABASE_URL`, or raw request bodies that may contain credentials. Prefer `err.message` + code over full objects in production responses; full stack only in server logs.
+
+## Auth
+
+`authenticateToken`: require `Authorization: Bearer <token>`, verify with `JWT_SECRET`, attach `{ sub, email, role }` to `req.user`, else 401. `requireRole('admin')` after it → 403 if role mismatch. JWT claims `{ sub, email, role, iat, exp }`, expiry **24h**. Passwords: `await bcrypt.hash(password, 12)` and `await bcrypt.compare(...)` only — async API always.
+
+**Crypto split:** `bcrypt` for password hashing/verify; `node:crypto` for UUIDs and any non-password randomness. Do not use deprecated crypto packages; do not use `node:crypto` to hash passwords.
+
+## Validation
+
+Zod at every route before services. Failed parse → 400:
+
+```typescript
+{
+  error: 'Validation failed',
+  code: 'VALIDATION_ERROR',
+  details: parsed.error.flatten().fieldErrors,
+}
+```
+
+Plain-text fields: enforce `.max(...)` and reject HTML, e.g. `z.string().regex(/^[^<>]*$/, 'HTML not allowed')` (or equivalent refine).
+
+## Ticket Status Transitions
+
+Only `TicketStatusService.transition(ticketId, toStatus)` mutates status — callable with no HTTP server. `PATCH /api/tickets/:id` must 400 if `status` is present.
+
+Run the transition inside a **transaction** with a row lock so concurrent PATCHes cannot both apply:
+
+```typescript
+await client.query('BEGIN');
+const { rows } = await client.query(
+  'SELECT id, status FROM tickets WHERE id = $1 FOR UPDATE',
+  [ticketId]
+);
+// validate transition against rows[0].status → UPDATE → COMMIT (ROLLBACK on failure)
+```
+
+Invalid transition → 409 `{ error, code: 'INVALID_TRANSITION' }`, status unchanged.
+
+## Rate Limiting & Errors
+
+`express-rate-limit` on `POST /api/auth/login`: **max 10 requests / 15 minutes / IP** (count every attempt, not only failures) → 429 `{ error, code: 'RATE_LIMITED' }`.
+
+Wire error shape everywhere: `{ error: string, code: string, details?: unknown }`. Success responses return the resource/DTO directly (no `{ success: true }` wrapper).
+
+```typescript
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  req.log?.error({ err }, 'Unhandled error');
+  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
+});
+```
+
+No stack traces, file paths, or SQL in client responses.
+
+## Event Loop
+
+No sync `fs`/`crypto` in request path. Password hashing always async bcrypt. This app has no file uploads or bulk CPU jobs — do not add Worker Threads or upload streaming “for later.”
+
+## Graceful Shutdown
+
+On `SIGTERM`/`SIGINT`: stop accepting connections, `await pool.end()`, then exit. Register once at boot.
+
+## Testing (backend)
+
+- Runner: **Vitest**; HTTP: **supertest** against the Express app (export `app` without listen).
+- Core requirement: **integration tests** for the status state machine — valid transitions succeed; invalid return 409 and leave status unchanged; concurrent-safe behavior covered at least with sequential conflicting transitions.
+- Use a test database (or transactions rolled back per test). Do not mock `TicketStatusService` in those integration tests.
+- Colocate as `*.test.ts` next to the unit under test, or under `backend/src/__tests__/`.
+
+## Validation Checklist
+
+1. ✅ Env validated with Zod before listen
+2. ✅ helmet + CORS(`FRONTEND_ORIGIN`) + `express.json({ limit: '100kb' })`
+3. ✅ pino logging; no secrets/PII in logs
+4. ✅ Zod at route boundary; plain-text / no-HTML on user text fields
+5. ✅ Parameterized `pg` queries only
+6. ✅ bcrypt async for passwords; `node:crypto` for UUIDs
+7. ✅ Login rate limit 10 / 15 min / IP
+8. ✅ Status via `TicketStatusService` + `FOR UPDATE` transaction
+9. ✅ Global error handler + 404 handler; wire shape `{ error, code, details? }`
+10. ✅ Graceful pool shutdown
+11. ✅ State-machine integration tests with Vitest + supertest

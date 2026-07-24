@@ -1,0 +1,124 @@
+---
+description: TypeScript 5.x Strict Type Safety & Compiler Rules for the Support Ticket Management System — all TypeScript files in both frontend/ and backend/
+globs: frontend/**/*.ts,frontend/**/*.tsx,backend/**/*.ts
+alwaysApply: false
+---
+
+# TypeScript Strict Type Safety & Compiler Rules
+
+Applies to all TypeScript in `frontend/` and `backend/`. Zod schemas are the source of truth for `User`, `Ticket`, `Comment`, and `ApiError`. Derive types with `z.infer<typeof schema>` — do not hand-write duplicate interfaces.
+
+## Shared Schemas Across Packages
+
+`frontend/` and `backend/` are separate packages. **Keep domain Zod schemas duplicated but identical** in both (same field names, enums, limits). Prefer copy-paste sync over a premature shared package. If drift appears, fix it immediately or extract `packages/shared` as an explicit decision.
+
+Field names in Zod/API types are **camelCase** (`assignedTo`, `createdAt`). DB columns stay snake_case; only repositories map.
+
+## Wire Formats (do not invent wrappers)
+
+**Success:** HTTP 2xx body is the resource or list directly, e.g. `Ticket`, `Ticket[]`, `{ token, user }`.
+
+**Error:** always
+
+```typescript
+export const apiErrorSchema = z.object({
+  error: z.string(),
+  code: z.string(),
+  details: z.unknown().optional(),
+});
+export type ApiError = z.infer<typeof apiErrorSchema>;
+```
+
+Do **not** use a `{ success: true | false }` envelope on the wire. If the frontend wants a result union internally, map from status code + body:
+
+```typescript
+type ClientResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ApiError };
+```
+
+## No `any`
+
+Use `unknown` and narrow with Zod (`parse` / `safeParse`). No `as Ticket` without a preceding successful parse.
+
+```typescript
+// ✅
+function parseTicket(data: unknown): Ticket {
+  return ticketSchema.parse(data);
+}
+
+// ❌
+function parseTicket(data: any): Ticket {
+  return data as Ticket;
+}
+```
+
+## Explicit Return Types & Const Enums
+
+Exported functions, route handlers, and React components declare explicit return types; internal helpers may infer. Status/priority/role maps use `as const` + `readonly`:
+
+```typescript
+export const VALID_STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed', 'Cancelled'] as const;
+export type TicketStatus = (typeof VALID_STATUSES)[number];
+
+export const TRANSITIONS: Readonly<Record<TicketStatus, readonly TicketStatus[]>> = {
+  Open: ['In Progress', 'Cancelled'],
+  'In Progress': ['Resolved', 'Cancelled'],
+  Resolved: ['Closed'],
+  Closed: [],
+  Cancelled: [],
+} as const;
+```
+
+## No Suppression; Safe Narrowing
+
+No `// @ts-ignore` or `// @ts-expect-error`. Prefer proper `.d.ts` for bad typings. Narrow API JSON with Zod on the client before use in UI/stores.
+
+## Domain Schema Example
+
+```typescript
+export const ticketSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(5000),
+  priority: z.enum(['low', 'medium', 'high']),
+  status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed', 'Cancelled']),
+  assignedTo: z.string().uuid().nullable(),
+  createdBy: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Ticket = z.infer<typeof ticketSchema>;
+```
+
+`User` public type **must not** include `passwordHash`. Login request schemas may accept `password`; responses never echo it.
+
+## Compiler Configuration
+
+Both packages use:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
+```
+
+## Agent Self-Verification
+
+1. ✅ No hardcoded secrets or local path fallbacks
+2. ✅ No `any`; no `@ts-ignore` / `@ts-expect-error`
+3. ✅ Exported functions have explicit return types
+4. ✅ Enums/transitions use `as const` / `readonly`
+5. ✅ Wire errors are `ApiError`; successes are bare resources
+6. ✅ Frontend/backend Zod domain schemas match (camelCase)
+7. ✅ `passwordHash` absent from client-facing types
+8. ✅ Both `tsconfig.json` files enable the strict flags above

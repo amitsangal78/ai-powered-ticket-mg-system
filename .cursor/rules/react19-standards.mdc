@@ -1,0 +1,84 @@
+---
+description: React 19 Frontend Standards for the Support Ticket Management System — all React component files, hooks, and frontend TypeScript modules under frontend/
+globs: frontend/**/*.tsx,frontend/**/*.ts,frontend/src/components/**
+alwaysApply: false
+---
+
+# React 19 Frontend Standards
+
+Applies to `frontend/` (React 19, Vite 6, Zustand 5). **Zustand is the primary data layer.** React 19 form/optimistic APIs complement stores; Suspense/`use(Promise)` is optional, not required.
+
+## State: Zustand First
+
+Five stores — `authStore`, `ticketStore`, `userStore`, `filterStore`, `uiStore` — hold server data, loading/error flags, and async actions that call the API client. No status-machine business logic in the client (server enforces; UI only offers valid next statuses).
+
+**Data loading pattern (canonical):**
+
+```tsx
+// ✅ Store action + useEffect to load on mount / filter change
+function TicketListPage() {
+  const { tickets, loading, error, fetchTickets } = useTicketStore();
+  const status = useFilterStore((s) => s.status);
+  const search = useFilterStore((s) => s.search);
+
+  useEffect(() => {
+    void fetchTickets({ status, search });
+  }, [status, search, fetchTickets]);
+
+  if (loading) return <TicketListSkeleton />;
+  if (error) return <p role="alert">{error}</p>;
+  return <ul>{tickets.map((t) => <li key={t.id}>{t.title}</li>)}</ul>;
+}
+```
+
+```tsx
+// ❌ Do not invent ad-hoc useState+fetch in every page when a store action exists
+```
+
+`use(Promise)` + `<Suspense>` is allowed for isolated read-only views if you prefer, but **do not** mix competing sources of truth for the same list (either the store owns tickets, or the promise does — not both). Prefer stores for ticket/user lists so filters and mutations stay simple.
+
+Auth bootstrap: restore JWT from `sessionStorage` in `authStore`, then `GET /api/auth/me`; gate role-dependent nav until `authStore` finished hydrating.
+
+## API Client
+
+- Base URL from `import.meta.env.VITE_API_URL` (e.g. `http://localhost:3000`).
+- Attach `Authorization: Bearer` from `authStore` when present.
+- On 401: clear auth, redirect to `/login`.
+- On 409: surface via `uiStore` or local form/optimistic error (status transitions, conflicts).
+- Parse success JSON with Zod schemas before writing into stores. Parse errors with `apiErrorSchema`.
+
+## Forms & Optimistic UI
+
+For **login** and **create ticket**, prefer `<form action={...}>` + `useActionState` for pending/error tied to that submission. The action should still call the same store/API helpers so lists stay in sync after success.
+
+```tsx
+const [state, formAction, isPending] = useActionState(createTicketAction, initialState);
+```
+
+Do not duplicate pending flags in both `useActionState` and a store for the same submit — one source of pending for that form.
+
+For **comments** and **status transitions**, use `useOptimistic` and roll back on failure (especially 409). Keep the store as the committed source of truth after the server responds.
+
+`useFormStatus` is fine for nested submit buttons inside those forms.
+
+## Routing & Components
+
+- Use **React Router** (v6/v7) with `ProtectedRoute` → unauthenticated users to `/login`.
+- Admin routes/nav only when `role === 'admin'` (hide, don’t disable); wait for auth hydration.
+- One non-trivial component per file; **named exports** only; colocate tests as `ComponentName.test.tsx`.
+- Error boundaries around route-level pages.
+- Status buttons: only valid next states from current status; none for `Closed` / `Cancelled`.
+
+## Context
+
+Prefer Zustand over React Context for app data. If Context is used for non-server UI (e.g. theme), `use(Context)` or `useContext` are both acceptable — no mandate.
+
+## Validation Checklist
+
+1. ✅ Ticket/user lists loaded via Zustand actions (useEffect OK for triggering)
+2. ✅ No dual source of truth (store vs Suspense) for the same data
+3. ✅ Forms use `useActionState` without duplicate pending state in a store
+4. ✅ Comments/status use `useOptimistic` + rollback on 409
+5. ✅ `VITE_API_URL` + Zod parse on API responses
+6. ✅ 401 clears session; admin UI hidden until role known
+7. ✅ Error boundaries on routes; only valid transition buttons rendered
